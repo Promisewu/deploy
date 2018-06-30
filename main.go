@@ -12,7 +12,7 @@ func main() {
 	{
 		projectGroup.GET("", allProject())
 		projectGroup.GET("/:id", getProject())
-		projectGroup.POST("/add", addProject())
+		projectGroup.POST("", addProject())
 		projectGroup.DELETE("/:id", deleteProject())
 		projectGroup.PUT("/:id", updateProject())
 	}
@@ -23,9 +23,18 @@ func main() {
 	{
 		deployGroup.GET("", allDeploy())
 		deployGroup.GET("/:id", getDeploy())
-		deployGroup.POST("/add", addDeploy())
+		deployGroup.POST("", addDeploy())
 		deployGroup.DELETE("/:id", deleteDeploy())
 		deployGroup.PUT("/:id", updateDeploy())
+	}
+
+	envGroup := r.Group("/env")
+	{
+		envGroup.GET("", allEnv())
+		envGroup.GET("/:id", getEnv())
+		envGroup.POST("", addEnv())
+		envGroup.DELETE("/:id", deleteEnv())
+		envGroup.PUT("/:id", updateEnv())
 	}
 
 	r.Run(":10008")
