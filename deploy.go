@@ -20,23 +20,50 @@ func addDeploy() gin.HandlerFunc {
 			return
 		}
 
-		deployIndex ++
-		newDeploy := new(deploy)
-		newDeploy.Id = deployIndex
-		newDeploy.Name = form.Name
-		for i := 0; i < len(form.Relations); i++ {
-			relation := new(DepProRelation)
-			relation.ProjectId = form.Relations[i].ProjectId
-			relation.TagName = form.Relations[i].TagName
-			relation.Ordering = form.Relations[i].Ordering
-			newDeploy.Relations = append(newDeploy.Relations, *relation)
+		for _, val := range deployMap {
+			if val.Name == form.Name {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "部署名称已存在",
+				})
+				return
+			}
 		}
-		deployMap[deployIndex] = newDeploy
+
+		for i := 0; i < len(form.Relations); i++ {
+			projectId := form.Relations[i].ProjectId
+			_, ok := projectMap[projectId]
+			if !ok {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    1,
+					"message": "项目不存在",
+				})
+				return
+			}
+		}
+
+		deployIndex ++
+
+		var relations []DepProRelation
+		for i := 0; i < len(form.Relations); i++ {
+			relation := DepProRelation{
+				ProjectId: form.Relations[i].ProjectId,
+				TagName:   form.Relations[i].TagName,
+				Ordering:  form.Relations[i].Ordering,
+			}
+			relations = append(relations, relation)
+		}
+
+		deployMap[deployIndex] = &deploy{
+			Id:        deployIndex,
+			Name:      form.Name,
+			Relations: relations,
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
 			"message": "add deploy",
-			"data":    newDeploy,
+			"data":    deployMap[deployIndex],
 		})
 		return
 	}
@@ -45,7 +72,7 @@ func addDeploy() gin.HandlerFunc {
 func deleteDeploy() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		id := getId(c)
+		id := getUintId(c, "deployId")
 		delete(deployMap, id)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -58,7 +85,6 @@ func deleteDeploy() gin.HandlerFunc {
 
 func updateDeploy() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		var form DeployForm
 		err := c.BindJSON(&form)
 		if err != nil {
@@ -69,9 +95,9 @@ func updateDeploy() gin.HandlerFunc {
 			return
 		}
 
-		id := getId(c)
-		myDeploy := deployMap[id]
-		if myDeploy == nil {
+		id := getUintId(c, "deployId")
+		_, ok := deployMap[id]
+		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    1,
 				"message": "没有该部署",
@@ -79,14 +105,30 @@ func updateDeploy() gin.HandlerFunc {
 			return
 		}
 
-		myDeploy.Name = form.Name
-		myDeploy.Relations = []DepProRelation{}
+		for _, val := range deployMap {
+			if val.Name == form.Name && id != val.Id {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "部署名称已存在",
+				})
+				return
+			}
+		}
+
+		var relations []DepProRelation
 		for i := 0; i < len(form.Relations); i++ {
-			relation := new(DepProRelation)
-			relation.ProjectId = form.Relations[i].ProjectId
-			relation.TagName = form.Relations[i].TagName
-			relation.Ordering = form.Relations[i].Ordering
-			myDeploy.Relations = append(myDeploy.Relations, *relation)
+			relation := DepProRelation{
+				ProjectId: form.Relations[i].ProjectId,
+				TagName:   form.Relations[i].TagName,
+				Ordering:  form.Relations[i].Ordering,
+			}
+			relations = append(relations, relation)
+		}
+
+		deployMap[id] = &deploy{
+			Id:        id,
+			Name:      form.Name,
+			Relations: relations,
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -116,7 +158,7 @@ func allDeploy() gin.HandlerFunc {
 func getDeploy() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		id := getId(c)
+		id := getUintId(c, "deployId")
 		data := deployMap[id]
 
 		c.JSON(http.StatusOK, gin.H{

@@ -1,5 +1,17 @@
 package main
 
+const (
+	StatusWaiting  = 1
+	StatusStarting = 2
+	StatusEnd      = 3
+)
+
+var statusMap = map[uint]string{
+	1: "未发布",
+	2: "发布中",
+	3: "已发布",
+}
+
 type Project struct {
 	Id         uint
 	Name       string
@@ -19,8 +31,19 @@ type DepProRelation struct {
 }
 
 type Env struct {
-	Id uint
-	Name string
+	Id        uint
+	Name      string
+	Config    string
+	Namespace string
+}
+
+type Job struct {
+	Id       uint
+	DeployId uint
+	EnvId    uint
+	Status   uint
+	Time     string
+	Log      []string
 }
 
 type projectForm struct {
@@ -40,5 +63,7 @@ type DepProRelationForm struct {
 }
 
 type envForm struct {
-	Name string `json:"name" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	Config    string `json:"config" binding:"required"`
+	Namespace string `json:"namespace" binding:"required"`
 }

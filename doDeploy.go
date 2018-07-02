@@ -1,96 +1,135 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"path/filepath"
-
-	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
+	"strings"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/homedir"
-	"io/ioutil"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
-	"strings"
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"time"
 )
 
-func test111() {
-	// create the clientset
-	config := getConfig()
+func doDeploy() gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-	//create client
-	clientset, err := kubernetes.NewForConfig(config)
+		deployId := getUintId(c, "deployId")
+		deploy := deployMap[deployId]
+		if deploy == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    1,
+				"message": "没有该部署",
+			})
+			return
+		}
+
+		envId := getUintId(c, "envId")
+		env := envMap[envId]
+		if env == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    1,
+				"message": "没有该环境",
+			})
+			return
+		}
+
+		go doJob(deployId, envId)
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "发布成功",
+		})
+		return
+	}
+}
+func doJob(deployId uint, envId uint) {
+	deploy := deployMap[deployId]
+	env := envMap[envId]
+
+	oldJob := jobMap[deployId][envId]
+	oldJob.Status = StatusStarting
+	oldJob.Log = append(oldJob.Log, dateTime()+"starting create client")
+
+	namespace := env.Namespace
+	projectList := deploy.Relations
+
+	// create client
+	clientset := createClient(envId)
+
+	oldJob.Log = append(oldJob.Log, dateTime()+"had created client")
+
+	//deploy project
+	for _, val := range projectList {
+		projectId := val.ProjectId
+		tagName := val.TagName
+		deployProject(clientset, namespace, projectId, tagName, &(oldJob.Log))
+	}
+
+	oldJob.Status = StatusEnd
+}
+
+func deployProject(clientset *kubernetes.Clientset, namespace string, projectId uint, tagName string, logList *[]string) {
+	project := projectMap[projectId]
+	projectName := project.Name
+	repostory := project.Repository
+
+	time.Sleep(1e9)
+	*logList = append(*logList, dateTime()+"start to pull k8s file...")
+	// 拉取 k8s.yml 文件
+	fileString := pullK8sFile(projectName, repostory, tagName)
+
+	*logList = append(*logList, dateTime()+"end to pull k8s file")
+
+	time.Sleep(1e9)
+	*logList = append(*logList, dateTime()+"start to pull split k8s file")
+	// k8s文件 根据 "---" 拆分成多个string 进行部署
+	k8sSlice := splitFile(fileString)
+	*logList = append(*logList, dateTime()+"end to pull split k8s file")
+
+	time.Sleep(1e9)
+	*logList = append(*logList, dateTime()+"start to deploy "+projectName+"...")
+	for _, val := range k8sSlice {
+		decode := scheme.Codecs.UniversalDeserializer().Decode
+		obj, versionKind, _ := decode([]byte(val), nil, nil)
+
+		// 获取需要部署的类型
+		kindType := versionKind.Kind
+
+		// 根据部署类型选择资源部署
+		switch kindType {
+		case "Deployment":
+			applyDeployment(clientset, namespace, projectName, tagName, obj, logList)
+		case "Service":
+			applyService(clientset, namespace, projectName, obj, logList)
+		}
+	}
+	*logList = append(*logList, dateTime()+"end to deploy "+projectName+"...")
+}
+
+func createClient(envId uint) (clientset *kubernetes.Clientset) {
+	var kubeconfig string
+	var err error
+	var config *rest.Config
+
+	env := envMap[envId]
+	configName := env.Config
+	kubeconfig = filepath.Join("config", configName)
+	config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err)
+	}
+
+	clientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	// separate k8s to deployment service
-	splitFile()
-
-	// create deployment
-	createDeployment(clientset)
-
-	// create service
-	createService(clientset)
+	return clientset
 }
 
-func splitFile() {
-	filecontent, _ := ioutil.ReadFile("./aixue-homework/k8s.yml")
-	filestring := string(filecontent)
-	arr := strings.Split(filestring, "---")
-	deploymentData := []byte(arr[0])
-	_ = ioutil.WriteFile("./aixue-homework/k8s.deployment.yml", deploymentData, 0644)
-
-	serviceData := []byte(arr[1])
-	_ = ioutil.WriteFile("./aixue-homework/k8s.service.yml", serviceData, 0644)
-}
-
-func createService(clientset *(kubernetes.Clientset)) {
-	serviceClient := clientset.CoreV1().Services(apiv1.NamespaceDefault)
-	filecontent, _ := ioutil.ReadFile("./aixue-homework/k8s.service.yml")
-	decode := scheme.Codecs.UniversalDeserializer().Decode
-	obj, _, _ := decode(filecontent, nil, nil)
-	service := obj.(*apiv1.Service)
-
-	fmt.Println("Creating service...")
-
-	result, err := serviceClient.Create(service)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Created service %q.\n", result.GetObjectMeta().GetName())
-}
-
-func createDeployment(clientset *(kubernetes.Clientset)) {
-	deploymentsClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
-
-	filecontent, _ := ioutil.ReadFile("./aixue-homework/k8s.deployment.yml")
-	decode := scheme.Codecs.UniversalDeserializer().Decode
-	obj, _, _ := decode(filecontent, nil, nil)
-	deployment := obj.(*appsv1.Deployment)
-
-	fmt.Println("Creating deployment...")
-
-	result, err := deploymentsClient.Create(deployment)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Created deployment %q.\n", result.GetObjectMeta().GetName())
-}
-
-func getConfig() (config *rest.Config) {
-	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-	return config
+func splitFile(fileString string) (k8sSlice []string) {
+	k8sSlice = strings.Split(fileString, "---")
+	return k8sSlice
 }

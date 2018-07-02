@@ -9,12 +9,12 @@ import (
 
 func tagList() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		projectId := getId(c)
+		projectId := getUintId(c, "deployId")
 		project := projectMap[projectId]
 		repository := project.Repository
 		name := project.Name
 
-		cmd := exec.Command("/bin/bash", "-c", "mkdir aixue-homework")
+		cmd := exec.Command("/bin/bash", "-c", "mkdir "+name)
 		cmd.Run()
 
 		cmd2 := exec.Command("/bin/bash", "-c", "git init")
@@ -22,7 +22,7 @@ func tagList() gin.HandlerFunc {
 		cmd2.Run()
 
 		cmd3 := exec.Command("/bin/bash", "-c", "git remote add origin "+repository)
-		cmd3.Dir = "./aixue-homework"
+		cmd3.Dir = "./" + name
 		cmd3.Run()
 
 		cmd4 := exec.Command("/bin/bash", "-c", "git fetch origin --tags")

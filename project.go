@@ -21,17 +21,30 @@ func addProject() gin.HandlerFunc {
 			return
 		}
 
+		for _, val := range projectMap {
+			if val.Name == form.Name {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "项目已存在",
+				})
+				return
+			}
+		}
+
 		index++
-		newProject := new(Project)
-		newProject.Id = index
-		newProject.Name = form.Name
-		newProject.Repository = form.Repository
-		projectMap[index] = newProject
+
+		newProject := Project{
+			Id:         index,
+			Name:       form.Name,
+			Repository: form.Repository,
+		}
+
+		projectMap[index] = &newProject
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
 			"message": "add project",
-			"data":    *newProject,
+			"data":    newProject,
 		})
 	}
 }
@@ -39,7 +52,7 @@ func addProject() gin.HandlerFunc {
 func deleteProject() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		id := getId(c)
+		id := getUintId(c, "deployId")
 		delete(projectMap, id)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -52,8 +65,9 @@ func deleteProject() gin.HandlerFunc {
 
 func updateProject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		var form projectForm
+		id := getUintId(c, "deployId")
+
 		err := c.BindJSON(&form)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -63,9 +77,8 @@ func updateProject() gin.HandlerFunc {
 			return
 		}
 
-		id := getId(c)
-		oldProject := projectMap[id]
-		if oldProject == nil {
+		_, ok := projectMap[id]
+		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    1,
 				"message": "没有该项目",
@@ -73,8 +86,21 @@ func updateProject() gin.HandlerFunc {
 			return
 		}
 
-		oldProject.Name = form.Name
-		oldProject.Repository = form.Repository
+		for _, val := range projectMap {
+			if val.Name == form.Name && val.Id != id {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "项目已存在",
+				})
+				return
+			}
+		}
+
+		projectMap[id] = &Project{
+			Id:         id,
+			Name:       form.Name,
+			Repository: form.Repository,
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
@@ -102,9 +128,8 @@ func allProject() gin.HandlerFunc {
 
 func getProject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		id := getId(c)
-		data := projectMap[id]
+		deployId := getUintId(c, "deployId")
+		data := projectMap[deployId]
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,

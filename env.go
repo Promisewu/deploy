@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"io/ioutil"
 )
 
 var envMap = make(map[uint]*Env, 50)
@@ -21,10 +22,24 @@ func addEnv() gin.HandlerFunc {
 			return
 		}
 
+		for _, val := range envMap {
+			if val.Name == form.Name {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "环境已存在",
+				})
+				return
+			}
+		}
+
 		envIndex++
-		newEnv := new(Env)
-		newEnv.Id = envIndex
-		newEnv.Name = form.Name
+		ioutil.WriteFile("config/"+form.Name+"_config", []byte(form.Config), 0644)
+		newEnv := &Env{
+			Id:        envIndex,
+			Name:      form.Name,
+			Config:    form.Name + "_config",
+			Namespace: form.Namespace,
+		}
 
 		envMap[envIndex] = newEnv
 
@@ -38,8 +53,7 @@ func addEnv() gin.HandlerFunc {
 
 func deleteEnv() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		id := getId(c)
+		id := getUintId(c, "envId")
 		delete(envMap, id)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -52,8 +66,9 @@ func deleteEnv() gin.HandlerFunc {
 
 func updateEnv() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		var form envForm
+		id := getUintId(c, "envId")
+
 		err := c.BindJSON(&form)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -63,9 +78,8 @@ func updateEnv() gin.HandlerFunc {
 			return
 		}
 
-		id := getId(c)
-		oldEnv := envMap[id]
-		if oldEnv == nil {
+		oldEnv, ok := envMap[id]
+		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    1,
 				"message": "没有该环境",
@@ -73,8 +87,23 @@ func updateEnv() gin.HandlerFunc {
 			return
 		}
 
-		oldEnv.Name = form.Name
+		for _, val := range envMap {
+			if val.Name == form.Name && val.Id != id {
+				c.JSON(http.StatusOK, gin.H{
+					"code":    1,
+					"message": "环境已存在",
+				})
+				return
+			}
+		}
 
+		ioutil.WriteFile("config/"+oldEnv.Name+"_config", []byte(form.Config), 0644)
+		envMap[id] = &Env{
+			Id:        id,
+			Name:      form.Name,
+			Config:    form.Name + "_config",
+			Namespace: form.Namespace,
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
 			"message": "update env",
@@ -93,7 +122,7 @@ func allEnv() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
-			"message": "get project list",
+			"message": "get env list",
 			"data":    data,
 		})
 	}
@@ -102,12 +131,27 @@ func allEnv() gin.HandlerFunc {
 func getEnv() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		id := getId(c)
-		data := envMap[id]
+		id := getUintId(c, "envId")
+		env, ok := envMap[id]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    1,
+				"message": "没有该环境",
+			})
+			return
+		}
+
+		tmpConfig, _ := ioutil.ReadFile("config/" + env.Config)
+		data := map[string]interface{}{
+			"Name":      env.Name,
+			"Id":        env.Id,
+			"Namespace": env.Namespace,
+			"Config":    string(tmpConfig),
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
-			"message": "delete project",
+			"message": "get env",
 			"data":    data,
 		})
 	}
