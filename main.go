@@ -6,6 +6,8 @@ import (
 
 func main() {
 
+	test111()
+	return
 	r := gin.Default()
 
 	projectGroup := r.Group("/project")
@@ -17,7 +19,7 @@ func main() {
 		projectGroup.PUT("/:id", updateProject())
 	}
 
-	r.GET("/tag/list", tagList())
+	r.GET("/tag/:id", tagList())
 
 	deployGroup := r.Group("/deploy")
 	{

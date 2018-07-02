@@ -1,11 +1,5 @@
 package main
 
-const (
-	PRIVATE_TOKEN_NAME  = "PRIVATE-TOKEN"
-	PRIVATE_TOKEN_VALUE = "i7TGyKz748BYigXqh9fB"
-	GITLAB_ADDRESS      = "https://gitlab-wenba.xueba100.com:2443"
-)
-
 type Project struct {
 	Id         uint
 	Name       string
@@ -39,3 +33,5 @@ type DepProRelationForm struct {
 	TagName   string `json:"tagName" binding:"required"`
 	Ordering  uint   `json:"ordering" binding:"required"`
 }
+
+
