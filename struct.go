@@ -18,6 +18,11 @@ type DepProRelation struct {
 	Ordering  uint
 }
 
+type Env struct {
+	Id uint
+	Name string
+}
+
 type projectForm struct {
 	Name       string `json:"name" binding:"required"`
 	Repository string `json:"Repository" binding:"required"`
@@ -34,4 +39,6 @@ type DepProRelationForm struct {
 	Ordering  uint   `json:"ordering" binding:"required"`
 }
 
-
+type envForm struct {
+	Name string `json:"name" binding:"required"`
+}

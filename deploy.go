@@ -121,7 +121,7 @@ func getDeploy() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
-			"message": "delete deploy",
+			"message": "get deploy",
 			"data":    data,
 		})
 	}
